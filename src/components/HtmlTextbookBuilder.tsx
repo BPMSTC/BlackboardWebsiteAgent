@@ -2,11 +2,233 @@ import { Check, Clipboard, Download, FileCode2, PanelRightOpen } from "lucide-re
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { defaultFormState, disciplines, interactionTypes, studentLevels } from "../data/builderOptions";
+import { runPrompt } from "../llm";
 import type { BuilderFormState } from "../types/builder";
 import { logDebug, logInfo, logWarn } from "../utils/devLogger";
 import { buildBuilderOutput } from "../utils/builderOutput";
+import { validateLlmDraftAgainstIntake } from "../utils/llmDraftValidation";
 
 type CopyTarget = "html" | "intake";
+
+type LLMRequestDiagnostics = {
+  traceId: string;
+  provider: string;
+  endpoint: string;
+  model: string;
+  timeoutMs: number;
+  maxTokens: number;
+  promptChars: number;
+  startedAt: string;
+  completedAt?: string;
+  elapsedMs?: number;
+  status?: "running" | "done" | "failed";
+  finishReason?: string | null;
+  error?: string;
+  browserOnline?: boolean;
+  validationPassed?: boolean;
+  validationViolations?: string[];
+  retryAttempted?: boolean;
+  retrySucceeded?: boolean;
+  retryError?: string;
+};
+
+type BuilderPreset = {
+  id: "typescript_loops" | "nursing_triage" | "networking_subnetting";
+  label: string;
+  description: string;
+  form: BuilderFormState;
+};
+
+const builderPresets: BuilderPreset[] = [
+  {
+    id: "typescript_loops",
+    label: "Test 1: TypeScript Loops",
+    description: "Programming lesson with interactive mode and web research.",
+    form: {
+      ...defaultFormState,
+      lessonRequest: {
+        ...defaultFormState.lessonRequest,
+        topic: "TypeScript loops",
+        discipline: "Programming",
+        courseName: "Software Development Fundamentals",
+        studentLevel: "Freshman / sophomore college",
+        tutorialDepthLevel: 1,
+        tutorialMode: "B",
+      },
+      contentRequirements: {
+        ...defaultFormState.contentRequirements,
+        requiredConcepts: "for loop\nwhile loop\ndo...while loop\nfor...of loop\nloop safety and stopping conditions",
+        doNotInclude: "Quizzes\nKnowledge checks\nAssessment prompts",
+        priorKnowledge: "Students understand variables, booleans, and simple conditionals.",
+        commonStudentStruggles: "Off-by-one errors and accidental infinite loops.",
+        instructorNotes: "Keep examples tied to classroom coding labs and Blackboard assignments.",
+      },
+      scope: {
+        ...defaultFormState.scope,
+        pageCountPreference: "force_one_page",
+        contentLength: "standard",
+      },
+      sources: {
+        ...defaultFormState.sources,
+        researchMode: "web_research",
+        preferredSources: "TypeScript docs\nMDN Web Docs",
+      },
+      style: {
+        ...defaultFormState.style,
+        template: "interactive_tutorial",
+        frameworkPreference: "plain_css",
+        tone: "friendly",
+        colorPreference: "Navy and amber high contrast",
+      },
+      media: {
+        ...defaultFormState.media,
+        imageInstructions: "Include a simple flowchart that shows loop start, condition, repeat, and stop.",
+        generateImages: "agent_decides",
+        findWebImages: "agent_decides",
+      },
+      interactivity: {
+        ...defaultFormState.interactivity,
+        preference: "requested",
+        allowedTypes: ["step_through", "interactive_diagram", "code_demo", "reveal_explanation"],
+        notes: "Use one interactive code walkthrough that traces loop iterations.",
+      },
+      githubAssets: {
+        ...defaultFormState.githubAssets,
+        lessonFolderSlug: "programming/typescript-loops",
+      },
+      output: {
+        ...defaultFormState.output,
+        alsoGenerateDownloadableHtml: true,
+      },
+    },
+  },
+  {
+    id: "nursing_triage",
+    label: "Test 2: Nursing Triage",
+    description: "Provided-material mode with low interactivity and visual guide style.",
+    form: {
+      ...defaultFormState,
+      lessonRequest: {
+        ...defaultFormState.lessonRequest,
+        topic: "Emergency room triage prioritization",
+        discipline: "Nursing",
+        courseName: "Nursing Assessment and Prioritization",
+        studentLevel: "Second-year college",
+        tutorialDepthLevel: 2,
+        tutorialMode: "A",
+      },
+      contentRequirements: {
+        ...defaultFormState.contentRequirements,
+        requiredConcepts: "Triage levels\nChief complaint\nVital sign red flags\nEscalation workflow",
+        requiredExactWording: "Patient safety and escalation must be emphasized in every scenario.",
+        doNotInclude: "Medication dosage instruction\nLicensure exam prep language",
+        priorKnowledge: "Students completed intro patient assessment and charting labs.",
+        commonStudentStruggles: "Students over-prioritize pain score without considering airway and perfusion.",
+      },
+      scope: {
+        ...defaultFormState.scope,
+        pageCountPreference: "custom",
+        customPageCount: "2",
+        contentLength: "detailed",
+      },
+      sources: {
+        ...defaultFormState.sources,
+        researchMode: "provided_material_only",
+        pastedSourceText: "Use hospital policy summary, simulation notes, and instructor-approved triage rubric.",
+        includeForMoreInformation: false,
+      },
+      style: {
+        ...defaultFormState.style,
+        template: "visual_guide",
+        frameworkPreference: "plain_css",
+        tone: "professional",
+        colorPreference: "Clinical blue and slate high contrast",
+      },
+      media: {
+        ...defaultFormState.media,
+        imageInstructions: "Use static infographic style icons for triage flow and urgency levels.",
+        generateImages: "no",
+        findWebImages: "no",
+      },
+      interactivity: {
+        ...defaultFormState.interactivity,
+        preference: "none",
+        allowedTypes: [],
+        notes: "No interactive widgets for this policy-focused version.",
+      },
+      output: {
+        ...defaultFormState.output,
+        includeForMoreInformation: false,
+      },
+    },
+  },
+  {
+    id: "networking_subnetting",
+    label: "Test 3: Networking Subnetting",
+    description: "Mixed-source mode with detailed breakdown and requested interactivity.",
+    form: {
+      ...defaultFormState,
+      lessonRequest: {
+        ...defaultFormState.lessonRequest,
+        topic: "IPv4 subnetting with CIDR",
+        discipline: "Networking",
+        courseName: "Networking and Infrastructure Basics",
+        studentLevel: "First-year college",
+        tutorialDepthLevel: 2,
+        tutorialMode: "C",
+      },
+      contentRequirements: {
+        ...defaultFormState.contentRequirements,
+        requiredConcepts: "CIDR notation\nSubnet mask conversion\nHost count calculation\nNetwork and broadcast addresses",
+        optionalConcepts: "VLSM intro\nCommon enterprise subnet patterns",
+        doNotInclude: "Certification exam dumps\nAssessment prompts",
+        priorKnowledge: "Students can convert binary and decimal numbers.",
+        commonStudentStruggles: "Bit borrowing and host-range mistakes.",
+      },
+      scope: {
+        ...defaultFormState.scope,
+        pageCountPreference: "custom",
+        customPageCount: "3",
+        contentLength: "detailed",
+        largeTopicWorkflow: "outline_first",
+      },
+      sources: {
+        ...defaultFormState.sources,
+        researchMode: "web_plus_provided_material",
+        pastedSourceText: "Include classroom worksheet examples and the instructor subnetting cheatsheet.",
+        preferredSources: "Cisco documentation\nCloudflare learning docs",
+        sourcesToAvoid: "Forum threads without citations",
+      },
+      style: {
+        ...defaultFormState.style,
+        template: "visual_guide",
+        frameworkPreference: "plain_css",
+        tone: "conversational",
+        colorPreference: "Dark teal and orange with high contrast",
+      },
+      media: {
+        ...defaultFormState.media,
+        imageInstructions: "Include a subnetting table visual and a binary place-value chart.",
+        generateImages: "yes",
+        findWebImages: "yes",
+      },
+      interactivity: {
+        ...defaultFormState.interactivity,
+        preference: "requested",
+        allowedTypes: ["step_through", "slider_demo", "toggle_comparison", "reveal_explanation"],
+        notes: "Add a slider that changes CIDR and updates host count examples.",
+      },
+      githubAssets: {
+        ...defaultFormState.githubAssets,
+        lessonFolderSlug: "networking/ipv4-subnetting-cidr",
+      },
+      output: {
+        ...defaultFormState.output,
+        alsoGenerateDownloadableHtml: true,
+      },
+    },
+  },
+];
 
 function updateNested<T extends keyof BuilderFormState, K extends keyof BuilderFormState[T]>(
   state: BuilderFormState,
@@ -42,9 +264,29 @@ function FieldGroup({
 
 export function HtmlTextbookBuilder() {
   const [form, setForm] = useState<BuilderFormState>(defaultFormState);
+  const [activePresetId, setActivePresetId] = useState<BuilderPreset["id"] | null>(null);
   const [activeOutput, setActiveOutput] = useState<"html" | "intake">("html");
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [llmResult, setLlmResult] = useState<string>("");
+  const [llmStatus, setLlmStatus] = useState<"idle" | "running" | "done" | "failed">("idle");
+  const [llmElapsedSeconds, setLlmElapsedSeconds] = useState(0);
+  const [llmDiagnostics, setLlmDiagnostics] = useState<LLMRequestDiagnostics | null>(null);
   const output = useMemo(() => buildBuilderOutput(form), [form]);
+
+  useEffect(() => {
+    if (llmStatus !== "running") {
+      return;
+    }
+
+    const startedAt = Date.now();
+    const interval = window.setInterval(() => {
+      setLlmElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [llmStatus]);
 
   useEffect(() => {
     logInfo("builder.initialized", {
@@ -79,6 +321,22 @@ export function HtmlTextbookBuilder() {
     setField("interactivity", "allowedTypes", next);
   }
 
+  function applyPreset(preset: BuilderPreset) {
+    setForm(preset.form);
+    setActivePresetId(preset.id);
+    setCopyStatus("idle");
+    setActiveOutput("html");
+    setLlmResult("");
+    setLlmStatus("idle");
+    setLlmDiagnostics(null);
+    logInfo("builder.preset.applied", {
+      presetId: preset.id,
+      presetLabel: preset.label,
+      topic: preset.form.lessonRequest.topic,
+      discipline: preset.form.lessonRequest.discipline,
+    });
+  }
+
   async function copyOutput(target: CopyTarget) {
     const text = target === "html" ? output.renderedHtml : output.intakeJson;
     try {
@@ -111,6 +369,170 @@ export function HtmlTextbookBuilder() {
     });
   }
 
+  async function generateWithLlm() {
+    const traceId = `llm-${Date.now()}`;
+    const provider = import.meta.env.VITE_LLM_PROVIDER ?? "lmstudio";
+    const timeoutMs = Number.parseInt(import.meta.env.VITE_LLM_TIMEOUT_MS ?? "", 10) || 420_000;
+    const configuredMaxTokens = Number.parseInt(import.meta.env.VITE_LLM_MAX_TOKENS ?? "", 10) || 900;
+    const suggestedByPages = output.pageCount > 1 ? output.pageCount * 350 : 600;
+    const maxTokens = Math.max(configuredMaxTokens, suggestedByPages);
+    const selectedModel =
+      provider === "openai"
+        ? import.meta.env.VITE_OPENAI_MODEL ?? "(not set)"
+        : import.meta.env.VITE_LMSTUDIO_MODEL ?? "(not set)";
+    const endpoint =
+      provider === "openai"
+        ? `${import.meta.env.VITE_OPENAI_BASE_URL ?? "https://api.openai.com/v1"}/chat/completions`
+        : `${import.meta.env.VITE_LMSTUDIO_BASE_URL ?? "http://127.0.0.1:1234/v1"}/chat/completions`;
+    const startedAtMs = Date.now();
+
+    setLlmStatus("running");
+    setLlmElapsedSeconds(0);
+    setLlmResult("");
+    setLlmDiagnostics({
+      traceId,
+      provider,
+      endpoint,
+      model: selectedModel,
+      timeoutMs,
+      maxTokens,
+      promptChars: output.generationPrompt.length,
+      startedAt: new Date(startedAtMs).toISOString(),
+      status: "running",
+      browserOnline: navigator.onLine,
+    });
+
+    logInfo("builder.llm.generate_started", {
+      traceId,
+      provider,
+      endpoint,
+      timeoutMs,
+      maxTokens,
+      promptChars: output.generationPrompt.length,
+      browserOnline: navigator.onLine,
+    });
+
+    try {
+      const response = await runPrompt(output.generationPrompt, {
+        model: provider === "openai" ? import.meta.env.VITE_OPENAI_MODEL : import.meta.env.VITE_LMSTUDIO_MODEL,
+        temperature: 0.4,
+        timeoutMs,
+        maxTokens,
+        traceId,
+      });
+
+      let finalResponse = response;
+      let validation = validateLlmDraftAgainstIntake(output.intakeJson, response.content);
+      let retryAttempted = false;
+      let retrySucceeded = false;
+      let retryError: string | undefined;
+
+      if (!validation.isValid) {
+        retryAttempted = true;
+        logWarn("builder.llm.validation_failed", {
+          traceId,
+          violations: validation.violations,
+        });
+
+        try {
+          const retryResponse = await runPrompt(validation.correctivePrompt, {
+            model:
+              provider === "openai" ? import.meta.env.VITE_OPENAI_MODEL : import.meta.env.VITE_LMSTUDIO_MODEL,
+            temperature: 0.2,
+            timeoutMs,
+            maxTokens,
+            traceId: `${traceId}-retry1`,
+          });
+
+          const mergedRetryContent =
+            validation.retryStrategy === "append_missing_sections"
+              ? [response.content.trim(), retryResponse.content.trim()].filter(Boolean).join("\n\n")
+              : retryResponse.content;
+
+          finalResponse = {
+            ...retryResponse,
+            content: mergedRetryContent,
+          };
+
+          const retryValidation = validateLlmDraftAgainstIntake(output.intakeJson, finalResponse.content);
+          if (retryValidation.isValid) {
+            validation = retryValidation;
+            retrySucceeded = true;
+          } else {
+            validation = retryValidation;
+          }
+        } catch (error) {
+          retryError = error instanceof Error ? error.message : "Unknown retry failure";
+          logWarn("builder.llm.retry_failed", {
+            traceId,
+            retryError,
+          });
+        }
+      }
+
+      const completedAtMs = Date.now();
+      const elapsedMs = completedAtMs - startedAtMs;
+
+      setLlmResult(finalResponse.content || "(Model returned no content)");
+      setLlmStatus("done");
+      setLlmDiagnostics((current) =>
+        current
+          ? {
+              ...current,
+              completedAt: new Date(completedAtMs).toISOString(),
+              elapsedMs,
+              status: "done",
+              finishReason: finalResponse.finishReason,
+              model: finalResponse.model,
+              validationPassed: validation.isValid,
+              validationViolations: validation.violations,
+              retryAttempted,
+              retrySucceeded,
+              retryError,
+            }
+          : current,
+      );
+      logInfo("builder.llm.generate_succeeded", {
+        traceId,
+        provider: finalResponse.provider,
+        model: finalResponse.model,
+        finishReason: finalResponse.finishReason,
+        elapsedMs,
+        validationPassed: validation.isValid,
+        retryAttempted,
+        retrySucceeded,
+      });
+    } catch (error) {
+      const completedAtMs = Date.now();
+      const elapsedMs = completedAtMs - startedAtMs;
+      const message = error instanceof Error ? error.message : "Unknown LLM error";
+      setLlmResult(message);
+      setLlmStatus("failed");
+      setLlmDiagnostics((current) =>
+        current
+          ? {
+              ...current,
+              completedAt: new Date(completedAtMs).toISOString(),
+              elapsedMs,
+              status: "failed",
+              error: message,
+              browserOnline: navigator.onLine,
+            }
+          : current,
+      );
+      logWarn("builder.llm.generate_failed", {
+        traceId,
+        provider,
+        endpoint,
+        timeoutMs,
+        maxTokens,
+        elapsedMs,
+        browserOnline: navigator.onLine,
+        message,
+      });
+    }
+  }
+
   function selectOutput(target: "html" | "intake") {
     setActiveOutput(target);
     logDebug("builder.output.tab_selected", {
@@ -124,11 +546,33 @@ export function HtmlTextbookBuilder() {
         <div className="hero-content">
           <p className="eyebrow">Blackboard-ready builder</p>
           <h1>HTML Textbook Page Builder</h1>
+          <p className="model-indicator" aria-label="Active LLM provider and model">
+            <span className="model-indicator-badge">
+              {(import.meta.env.VITE_LLM_PROVIDER ?? "lmstudio").toUpperCase()}
+            </span>
+            {import.meta.env.VITE_LLM_PROVIDER === "openai"
+              ? (import.meta.env.VITE_OPENAI_MODEL ?? "(model not set)")
+              : (import.meta.env.VITE_LMSTUDIO_MODEL ?? "(model not set)")}
+          </p>
           <p className="hero-copy">
             Build structured instructional HTML pages faculty can copy into Blackboard.
             Start with a topic, tune the teaching requirements, then preview the page
             outline, validation checks, and full HTML output.
           </p>
+          <div className="preset-bar" role="group" aria-label="Quick test case presets">
+            {builderPresets.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={`preset-button ${activePresetId === preset.id ? "is-active" : ""}`}
+                onClick={() => applyPreset(preset)}
+                title={preset.description}
+              >
+                <strong>{preset.label}</strong>
+                <span>{preset.description}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -432,6 +876,9 @@ export function HtmlTextbookBuilder() {
                 <PanelRightOpen aria-hidden="true" />
                 Intake JSON
               </button>
+              <button type="button" className="secondary-button" onClick={generateWithLlm} disabled={llmStatus === "running"}>
+                {llmStatus === "running" ? "Generating..." : "Generate with LLM"}
+              </button>
               <button type="button" className="copy-button" onClick={() => copyOutput(activeOutput)}>
                 <Clipboard aria-hidden="true" />
                 {copyStatus === "copied" ? "Copied" : copyStatus === "failed" ? "Copy failed" : "Copy output"}
@@ -444,6 +891,32 @@ export function HtmlTextbookBuilder() {
           </div>
           <pre aria-label={activeOutput === "html" ? "Generated Blackboard HTML" : "Generated intake JSON"}>
             {activeOutput === "html" ? output.renderedHtml : output.intakeJson}
+          </pre>
+          <div className="section-heading compact">
+            <p className="eyebrow">LLM result</p>
+            <h2>Model-generated lesson draft</h2>
+            <p>
+              {llmStatus === "idle" && "Click Generate with LLM to submit the prompt to your configured provider."}
+              {llmStatus === "running" && `Waiting for model response... ${llmElapsedSeconds}s elapsed.`}
+              {llmStatus === "done" && "Latest response from your configured model provider."}
+              {llmStatus === "failed" && "Model request failed (including timeout). Review the response below."}
+            </p>
+          </div>
+          {llmStatus === "running" ? (
+            <div className="llm-wait-banner" role="status" aria-live="polite">
+              <span className="llm-spinner" aria-hidden="true" />
+              <strong>Generating with model...</strong>
+              <span>{llmElapsedSeconds}s elapsed</span>
+            </div>
+          ) : null}
+          <pre aria-label="LLM generated response">{llmResult || "No model response yet."}</pre>
+          <div className="section-heading compact">
+            <p className="eyebrow">Diagnostics</p>
+            <h2>LLM request trace</h2>
+            <p>Use this request trace to debug network, endpoint, and timeout failures quickly.</p>
+          </div>
+          <pre aria-label="LLM diagnostics JSON">
+            {llmDiagnostics ? JSON.stringify(llmDiagnostics, null, 2) : "No diagnostics captured yet."}
           </pre>
         </section>
       </main>

@@ -89,4 +89,17 @@ describe("HTML Textbook Page Builder", () => {
     expect(outline).not.toBeNull();
     expect(within(outline as HTMLElement).getByText("Interactive exploration")).toBeInTheDocument();
   });
+
+  it("applies a top preset and fills multiple form fields", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /Test 3: Networking Subnetting/i }));
+
+    expect(screen.getByLabelText("Lesson topic")).toHaveValue("IPv4 subnetting with CIDR");
+    expect(screen.getByLabelText("Course name")).toHaveValue("Networking and Infrastructure Basics");
+    expect(screen.getByLabelText("Course / discipline")).toHaveValue("Networking");
+    expect(screen.getByLabelText("Page count preference")).toHaveValue("custom");
+    expect(screen.getByLabelText("Custom page count")).toHaveValue("3");
+  });
 });

@@ -35,6 +35,9 @@ export const defaultFormState: BuilderFormState = {
     discipline: "Programming",
     courseName: "",
     studentLevel: "Freshman / sophomore college",
+    tutorialDepthLevel: 1,
+    tutorialMode: "B",
+    tutorialStyleFlags: [],
   },
   contentRequirements: {
     requiredConcepts: "",

@@ -15,6 +15,7 @@ pnpm-debug.log*
 # Environment files
 .env
 .env.*
+.env.local
 !.env.example
 
 # TypeScript cache

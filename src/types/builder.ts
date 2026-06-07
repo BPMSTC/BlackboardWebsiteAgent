@@ -4,12 +4,18 @@ export type StyleTemplate = "clean_academic" | "visual_guide" | "interactive_tut
 export type FrameworkPreference = "agent_decides" | "plain_css" | "bootstrap" | "tailwind";
 export type InteractivityPreference = "none" | "agent_decides" | "requested";
 export type AssetDecision = "no" | "yes" | "agent_decides";
+export type TutorialDepthLevel = 0 | 1 | 2 | 3 | 4;
+export type TutorialMode = "A" | "B" | "C";
+export type TutorialStyleFlag = "S" | "V" | "I" | "T" | "C" | "H";
 
 export type LessonRequest = {
   topic: string;
   discipline: string;
   courseName: string;
   studentLevel: string;
+  tutorialDepthLevel: TutorialDepthLevel;
+  tutorialMode: TutorialMode;
+  tutorialStyleFlags: TutorialStyleFlag[];
 };
 
 export type BuilderFormState = {
@@ -87,6 +93,7 @@ export type ValidationItem = {
 
 export type BuilderOutput = {
   intakeJson: string;
+  generationPrompt: string;
   renderedHtml: string;
   recommendedScope: string;
   pageCount: number;
