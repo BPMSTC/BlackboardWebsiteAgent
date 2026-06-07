@@ -1,8 +1,9 @@
 import { Check, Clipboard, Download, FileCode2, PanelRightOpen } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { defaultFormState, disciplines, interactionTypes, studentLevels } from "../data/builderOptions";
 import type { BuilderFormState } from "../types/builder";
+import { logDebug, logInfo, logWarn } from "../utils/devLogger";
 import { buildBuilderOutput } from "../utils/builderOutput";
 
 type CopyTarget = "html" | "intake";
@@ -45,11 +46,23 @@ export function HtmlTextbookBuilder() {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const output = useMemo(() => buildBuilderOutput(form), [form]);
 
+  useEffect(() => {
+    logInfo("builder.initialized", {
+      defaultDiscipline: form.lessonRequest.discipline,
+      defaultTemplate: form.style.template,
+    });
+  }, []);
+
   function setField<T extends keyof BuilderFormState, K extends keyof BuilderFormState[T]>(
     group: T,
     key: K,
     value: BuilderFormState[T][K],
   ) {
+    logDebug("builder.field.updated", {
+      group,
+      key,
+      value,
+    });
     setForm((current) => updateNested(current, group, key, value));
     setCopyStatus("idle");
   }
@@ -59,6 +72,10 @@ export function HtmlTextbookBuilder() {
     const next = current.includes(typeId)
       ? current.filter((item) => item !== typeId)
       : [...current, typeId];
+    logDebug("builder.interaction.toggled", {
+      typeId,
+      enabled: !current.includes(typeId),
+    });
     setField("interactivity", "allowedTypes", next);
   }
 
@@ -67,19 +84,38 @@ export function HtmlTextbookBuilder() {
     try {
       await navigator.clipboard.writeText(text);
       setCopyStatus("copied");
+      logInfo("builder.output.copied", {
+        target,
+        characters: text.length,
+      });
     } catch {
       setCopyStatus("failed");
+      logWarn("builder.output.copy_failed", {
+        target,
+      });
     }
   }
 
   function downloadHtml() {
+    const fileName = `${form.lessonRequest.topic.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "blackboard-lesson"}.html`;
     const blob = new Blob([output.renderedHtml], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${form.lessonRequest.topic.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "blackboard-lesson"}.html`;
+    anchor.download = fileName;
     anchor.click();
     URL.revokeObjectURL(url);
+    logInfo("builder.output.downloaded", {
+      fileName,
+      characters: output.renderedHtml.length,
+    });
+  }
+
+  function selectOutput(target: "html" | "intake") {
+    setActiveOutput(target);
+    logDebug("builder.output.tab_selected", {
+      target,
+    });
   }
 
   return (
@@ -388,11 +424,11 @@ export function HtmlTextbookBuilder() {
               <p>Copy the rendered HTML into Blackboard's content editor, or inspect the intake JSON.</p>
             </div>
             <div className="button-row">
-              <button type="button" className="secondary-button" onClick={() => setActiveOutput("html")}>
+              <button type="button" className="secondary-button" onClick={() => selectOutput("html")}>
                 <FileCode2 aria-hidden="true" />
                 HTML
               </button>
-              <button type="button" className="secondary-button" onClick={() => setActiveOutput("intake")}>
+              <button type="button" className="secondary-button" onClick={() => selectOutput("intake")}>
                 <PanelRightOpen aria-hidden="true" />
                 Intake JSON
               </button>

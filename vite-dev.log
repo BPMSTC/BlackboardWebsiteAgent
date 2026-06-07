@@ -35,3 +35,16 @@
 [2m12:32:33 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/HtmlTextbookBuilder.tsx[22m
 [2m12:32:33 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/HtmlTextbookBuilder.tsx[22m
 [2m12:33:23 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mindex.html[22m
+[2m1:12:12 PM[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[2m1:12:12 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because vite config has changed
+[2m1:12:12 PM[22m [36m[1m[vite][22m[39m server restarted.
+[2m1:12:32 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/HtmlTextbookBuilder.tsx[22m
+[2m1:12:36 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/main.tsx[22m
+[2m1:13:02 PM[22m [36m[1m[vite][22m[39m changed tsconfig file detected: C:/Users/Brent/Documents/codex/BlackboardWebsiteAgent/tsconfig.app.json - Clearing cache and forcing full-reload to ensure TypeScript is compiled with updated config values.
+[2m1:13:05 PM[22m [36m[1m[vite][22m[39m changed tsconfig file detected: C:/Users/Brent/Documents/codex/BlackboardWebsiteAgent/tsconfig.node.json - Clearing cache and forcing full-reload to ensure TypeScript is compiled with updated config values.
+[2m1:13:10 PM[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[2m1:13:10 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m Re-optimizing dependencies because lockfile has changed
+[2m1:13:10 PM[22m [36m[1m[vite][22m[39m server restarted.
+[2m1:13:13 PM[22m [36m[1m[vite][22m[39m [32mvite.config.ts changed, restarting server...[39m
+[2m1:13:13 PM[22m [36m[1m[vite][22m[39m server restarted.
+[2m1:14:19 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/utils/devLogger.ts[22m
